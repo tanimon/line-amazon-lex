@@ -13,6 +13,50 @@ export class BackendStack extends Stack {
 
     const maxPromptRetriesCount: number = 3;
 
+    const genderSlotType: lex.CfnBot.SlotTypeProperty = {
+      name: 'Gender',
+      valueSelectionSetting: {
+        resolutionStrategy: 'ORIGINAL_VALUE',
+      },
+      slotTypeValues: [
+        {
+          sampleValue: {
+            value: '男性',
+          },
+        },
+        {
+          sampleValue: {
+            value: '女性',
+          },
+        },
+        {
+          sampleValue: {
+            value: 'その他',
+          },
+        },
+      ],
+    };
+
+    const genderSlot: lex.CfnBot.SlotProperty = {
+      name: 'Gender',
+      slotTypeName: 'Gender',
+      valueElicitationSetting: {
+        slotConstraint: 'Required',
+        promptSpecification: {
+          maxRetries: maxPromptRetriesCount,
+          messageGroupsList: [
+            {
+              message: {
+                plainTextMessage: {
+                  value: '性別を教えてください。',
+                },
+              },
+            },
+          ],
+        },
+      },
+    };
+
     const dateOfBirthSlot: lex.CfnBot.SlotProperty = {
       name: 'DateOfBirth',
       slotTypeName: 'AMAZON.Date',
@@ -40,7 +84,7 @@ export class BackendStack extends Stack {
           utterance: '入会',
         },
       ],
-      slots: [dateOfBirthSlot],
+      slots: [genderSlot, dateOfBirthSlot],
     };
 
     const fallbackIntent: lex.CfnBot.IntentProperty = {
@@ -59,6 +103,7 @@ export class BackendStack extends Stack {
         {
           localeId: 'ja_JP',
           nluConfidenceThreshold: 0.4,
+          slotTypes: [genderSlotType],
           intents: [signUpIntent, fallbackIntent],
         },
       ],
