@@ -70,6 +70,15 @@ export class BackendStack extends Stack {
           messageGroupsList: [
             {
               message: {
+                customPayload: {
+                  value: `{
+
+                  }`,
+                },
+              },
+            },
+            {
+              message: {
                 plainTextMessage: {
                   value: '生年月日を教えてください。',
                 },
@@ -88,6 +97,16 @@ export class BackendStack extends Stack {
         },
       ],
       slots: [genderSlot, dateOfBirthSlot],
+      slotPriorities: [
+        {
+          priority: 1,
+          slotName: genderSlot.name,
+        },
+        {
+          priority: 2,
+          slotName: dateOfBirthSlot.name,
+        },
+      ],
     };
 
     const fallbackIntent: lex.CfnBot.IntentProperty = {
@@ -95,21 +114,42 @@ export class BackendStack extends Stack {
       parentIntentSignature: 'AMAZON.FallbackIntent',
     };
 
+    const botLocale = 'ja_JP';
+
     const bot = new lex.CfnBot(this, 'SignUpBot', {
       name: 'SignUpBot',
       idleSessionTtlInSeconds: 5 * 60,
       roleArn: lexRole.roleArn,
       dataPrivacy: {
-        ChildDirected: true,
+        ChildDirected: false,
       },
+      autoBuildBotLocales: true,
       botLocales: [
         {
-          localeId: 'ja_JP',
+          localeId: botLocale,
           nluConfidenceThreshold: 0.4,
           slotTypes: [genderSlotType],
           intents: [signUpIntent, fallbackIntent],
         },
       ],
+    });
+
+    const botVersion = new lex.CfnBotVersion(this, 'SignUpBotVersion', {
+      botId: bot.ref,
+      botVersionLocaleSpecification: [
+        {
+          localeId: botLocale,
+          botVersionLocaleDetails: {
+            sourceBotVersion: 'DRAFT',
+          },
+        },
+      ],
+    });
+
+    const botAlias = new lex.CfnBotAlias(this, 'SignUpBotAlias', {
+      botAliasName: 'Beta',
+      botId: bot.ref,
+      botVersion: botVersion.attrBotVersion,
     });
 
     const lambdaRole = new iam.Role(this, 'LambdaRole', {
@@ -121,13 +161,16 @@ export class BackendStack extends Stack {
       )
     );
     lambdaRole.addManagedPolicy(
-      iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonLexRunBotsOnly')
+      iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonLexFullAccess')
     );
     const lineWebhookFunc = new NodejsFunction(this, 'LineWebhookFunc', {
       runtime: lambda.Runtime.NODEJS_14_X,
       environment: {
         LINE_CHANNEL_SECRET: process.env.LINE_CHANNEL_SECRET!,
         LINE_CHANNEL_ACCESS_TOKEN: process.env.LINE_CHANNEL_ACCESS_TOKEN!,
+        LEX_BOT_ID: bot.ref,
+        LEX_BOT_ALIAS_ID: botAlias.attrBotAliasId,
+        LEX_LOCALE_ID: botLocale,
       },
       role: lambdaRole,
       entry: 'lambda/line-webhook.ts',
