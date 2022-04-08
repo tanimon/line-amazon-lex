@@ -2,6 +2,9 @@ import {
   LexRuntimeV2Client,
   RecognizeTextCommand,
   RecognizeTextCommandOutput,
+  MessageContentType,
+  DialogActionType,
+  Message as LexMessage,
 } from '@aws-sdk/client-lex-runtime-v2';
 import * as line from '@line/bot-sdk';
 
@@ -45,10 +48,7 @@ const handleEvent = async (
 
   const message = await postTextToLex(event.source.userId, event.message.text);
 
-  return lineClient.replyMessage(event.replyToken, {
-    type: 'text',
-    text: message,
-  });
+  return lineClient.replyMessage(event.replyToken, message);
 };
 
 const lexClient = new LexRuntimeV2Client({
@@ -58,7 +58,9 @@ const lexClient = new LexRuntimeV2Client({
 const postTextToLex = async (
   userId: string,
   message: string
-): Promise<string> => {
+): Promise<line.Message> => {
+  console.log(`userId: ${userId}, message: ${message}`);
+
   const command = new RecognizeTextCommand({
     botAliasId: botAliasId,
     botId: botId,
@@ -67,23 +69,62 @@ const postTextToLex = async (
     text: message,
   });
 
-  let responseMessage: string;
+  console.log(`command: ${JSON.stringify(command)}`);
+
   try {
     const response = await lexClient.send(command);
 
+    console.log(`response: ${JSON.stringify(response)}`);
+
     if (isSessionClosed(response)) {
-      return `Intent is closed.`;
+      console.log('Session is closed.');
+      const message = response.messages?.[0]?.content ?? 'Intent is closed.';
+      return createTextMessage(message);
     }
 
-    responseMessage = response.messages?.[0].content ?? 'Something went wrong.';
-    console.log(`message: ${responseMessage}`);
+    const responseMessage = response.messages?.[0];
+    if (!responseMessage) {
+      return createTextMessage('No response message.');
+    }
+
+    const messageContent = responseMessage.content;
+    if (!messageContent) {
+      return createTextMessage('No message content.');
+    }
+
+    console.log(`messageContent: ${messageContent}`);
+
+    if (isCustomPayloadMessage(responseMessage)) {
+      console.log('This is custom payload message.');
+      return createTemplateMessage(messageContent);
+    }
+
+    return createTextMessage(messageContent);
   } catch (error) {
     console.log(error);
-    responseMessage = 'Error occurred.';
+    return createTextMessage('Error occurred.');
   }
-
-  return responseMessage;
 };
 
 const isSessionClosed = (response: RecognizeTextCommandOutput): boolean =>
-  response?.sessionState?.dialogAction?.type === 'Close';
+  response?.sessionState?.dialogAction?.type === DialogActionType.CLOSE;
+
+const isCustomPayloadMessage = (message: LexMessage): boolean => {
+  const messageContent = message!.content!.trim();
+  return (
+    message?.contentType === MessageContentType.CUSTOM_PAYLOAD &&
+    messageContent.startsWith('{') === true &&
+    messageContent.endsWith('}') === true
+  );
+};
+
+const createTextMessage = (message: string): line.TextMessage => {
+  return {
+    type: 'text',
+    text: message,
+  };
+};
+
+const createTemplateMessage = (payload: string): line.TemplateMessage => {
+  return JSON.parse(payload) as unknown as line.TemplateMessage;
+};
