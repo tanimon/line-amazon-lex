@@ -116,6 +116,42 @@ export class BackendStack extends Stack {
 
     const botLocale = 'ja_JP';
 
+    const lambdaRole = new iam.Role(this, 'LambdaRole', {
+      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AWSLambdaBasicExecutionRole'
+        ),
+        iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonLexFullAccess'),
+      ],
+    });
+
+    const intentFulfillmentFunc = new NodejsFunction(
+      this,
+      'IntentFulfillmentFunc',
+      {
+        runtime: lambda.Runtime.NODEJS_14_X,
+        entry: 'lambda/intent-fulfillment.ts',
+        role: lambdaRole,
+      }
+    );
+
+    const intentFulfillmentFuncVersion = new lambda.Version(
+      this,
+      'IntentFulfillmentFuncVersion',
+      {
+        lambda: intentFulfillmentFunc,
+      }
+    );
+    const intentFulfillmentFuncAlias = new lambda.Alias(
+      this,
+      'IntentFulfillmentFuncAlias',
+      {
+        aliasName: 'dev',
+        version: intentFulfillmentFuncVersion,
+      }
+    );
+
     const bot = new lex.CfnBot(this, 'SignUpBot', {
       name: 'SignUpBot',
       idleSessionTtlInSeconds: 5 * 60,
@@ -152,17 +188,6 @@ export class BackendStack extends Stack {
       botVersion: botVersion.attrBotVersion,
     });
 
-    const lambdaRole = new iam.Role(this, 'LambdaRole', {
-      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
-    });
-    lambdaRole.addManagedPolicy(
-      iam.ManagedPolicy.fromAwsManagedPolicyName(
-        'service-role/AWSLambdaBasicExecutionRole'
-      )
-    );
-    lambdaRole.addManagedPolicy(
-      iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonLexFullAccess')
-    );
     const lineWebhookFunc = new NodejsFunction(this, 'LineWebhookFunc', {
       runtime: lambda.Runtime.NODEJS_14_X,
       environment: {
