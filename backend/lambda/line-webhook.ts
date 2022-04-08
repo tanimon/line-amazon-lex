@@ -16,6 +16,8 @@ const botAliasId = process.env.LEX_BOT_ALIAS_ID!;
 const localeId = process.env.LEX_LOCALE_ID!;
 
 export const handler = async (event: any) => {
+  console.log(`event: ${JSON.stringify(event)}`);
+
   const eventBody: line.WebhookRequestBody = JSON.parse(event.body);
   const events: line.WebhookEvent[] = eventBody.events;
 
@@ -38,6 +40,9 @@ const lineClient = new line.Client({
 const handleEvent = async (
   event: line.WebhookEvent
 ): Promise<void | line.MessageAPIResponseBase> => {
+  console.log(`event: ${JSON.stringify(event)}`);
+
+  // テキストメッセージ以外は処理しない
   if (
     event.type !== 'message' ||
     event.message.type !== 'text' ||
